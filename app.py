@@ -22,7 +22,8 @@ st.markdown("""
 API_KEY = "AIzaSyCNigw85FMCdi0HsRI1RUU5lwwq1tNMOwg"
 
 def call_ai_safe(prompt):
-    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={API_KEY}"
+    # Đã đổi sang model gemini-pro bản ổn định tuyệt đối
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={API_KEY}"
     headers = {'Content-Type': 'application/json'}
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
     
@@ -105,7 +106,7 @@ if step == 1:
     with st.form("step1"):
         col1, col2 = st.columns(2)
         info = col1.text_input("Vị trí & Trình độ:", placeholder="VD: Sinh viên năm 3 - DAV")
-        skills = col2.text_input("Năng lực & Bằng cấp:", placeholder="VD: IELTS 7.5, Python, CFA")
+        skills = col2.text_input("Năng lực & Bằng cấp:", placeholder="VD: IELTS 7.5, Python, CLB Chứng Khoán")
         
         st.markdown("---")
         target = st.text_area("Mục tiêu cụ thể:", placeholder="VD: Trúng tuyển thực tập sinh Techcombank")
@@ -114,7 +115,7 @@ if step == 1:
         if st.form_submit_button("THẨM ĐỊNH CHIẾN LƯỢC", type="primary"):
             if target and deadline:
                 with st.spinner("AI đang thẩm định tính khả thi..."):
-                    prompt = f"Hồ sơ: {info}, Kỹ năng: {skills}. Mục tiêu: {target} trong {deadline}. Hãy thẩm định tính khả thi. Nếu phi lý (như trúng số), hãy giải thích và từ chối. Nếu thực tế, nhận xét ngắn gọn. Dưới 100 chữ tiếng Việt."
+                    prompt = f"Hồ sơ: {info}, Kỹ năng: {skills}. Mục tiêu: {target} trong {deadline}. Hãy thẩm định tính khả thi. Nếu phi lý, hãy giải thích và từ chối. Nếu thực tế, nhận xét ngắn gọn. Dưới 100 chữ tiếng Việt."
                     st.session_state.state["feasibility"] = call_ai_safe(prompt)
                     st.session_state.state["profile"] = {"info": info, "skills": skills}
                     st.session_state.state["goal"] = {"task": target, "time": deadline}
@@ -133,7 +134,7 @@ elif step == 2:
     
     if not st.session_state.state["sub_tasks"]:
         with st.spinner("AI đang bóc tách lộ trình..."):
-            prompt = f"Mục tiêu: {st.session_state.state['goal']['task']} trong {st.session_state.state['goal']['time']}. Vạch ra 4 hạng mục nhỏ cần chuẩn bị (Kiến thức, Kỹ năng, Công cụ, Network). Trả về JSON: {{\\\"items\\\": {{\\\"Tên mục\\\": \\\"Gợi ý chi tiết\\\"}}}}"
+            prompt = f"Mục tiêu: {st.session_state.state['goal']['task']} trong {st.session_state.state['goal']['time']}. Vạch ra 4 hạng mục nhỏ cần chuẩn bị. Trả về JSON: {{\\\"items\\\": {{\\\"Tên mục\\\": \\\"Gợi ý chi tiết\\\"}}}}"
             st.session_state.state["sub_tasks"] = call_ai_safe(prompt)
     
     if isinstance(st.session_state.state["sub_tasks"], dict):
