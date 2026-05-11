@@ -19,11 +19,11 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-API_KEY = "AIzaSyCNigw85FMCdi0HsRI1RUU5lwwq1tNMOwg"
+FIREBASE_KEY = "AIzaSyCNigw85FMCdi0HsRI1RUU5lwwq1tNMOwg"
+GEMINI_KEY = "AIzaSyAfWw0C4vlqiN5kYAtrGYFl2zudYYYWT1A"
 
 def call_ai_safe(prompt):
-    # Đã đổi sang model gemini-pro bản ổn định tuyệt đối
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}"
     headers = {'Content-Type': 'application/json'}
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
     
@@ -39,16 +39,12 @@ def call_ai_safe(prompt):
             if text:
                 json_match = re.search(r'\{.*\}', text, re.DOTALL)
                 if json_match:
-                    try:
-                        return json.loads(json_match.group(0))
-                    except:
-                        pass
+                    try: return json.loads(json_match.group(0))
+                    except: pass
                 return text
         return "Hệ thống AI trả về dữ liệu rỗng."
     except Exception as e:
         return f"Lỗi kết nối: {str(e)}"
-
-FIREBASE_KEY = "AIzaSyD00faEnc-wexp9f3UIdfSJFrMZwNOFm7A"
 
 def firebase_auth(email, password, is_signup=False):
     url = f"https://identitytoolkit.googleapis.com/v1/accounts:{'signUp' if is_signup else 'signInWithPassword'}?key={FIREBASE_KEY}"
@@ -79,7 +75,7 @@ if not st.session_state.state["logged_in"]:
                     st.session_state.state["logged_in"] = True
                     st.session_state.state["email"] = res["email"]
                     st.rerun()
-                else: st.error(res.get("error", {}).get("message", "Đăng nhập thất bại"))
+                else: st.error("Đăng nhập thất bại. Vui lòng kiểm tra lại.")
     with t2:
         with st.form("signup"):
             es = st.text_input("Email")
@@ -87,7 +83,7 @@ if not st.session_state.state["logged_in"]:
             if st.form_submit_button("TẠO TÀI KHOẢN", type="primary"):
                 res = firebase_auth(es, ps, True)
                 if "idToken" in res: st.success("Đã tạo tài khoản thành công!")
-                else: st.error(res.get("error", {}).get("message", "Đăng ký thất bại"))
+                else: st.error("Tạo tài khoản thất bại.")
     st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
 
@@ -106,7 +102,7 @@ if step == 1:
     with st.form("step1"):
         col1, col2 = st.columns(2)
         info = col1.text_input("Vị trí & Trình độ:", placeholder="VD: Sinh viên năm 3 - DAV")
-        skills = col2.text_input("Năng lực & Bằng cấp:", placeholder="VD: IELTS 7.5, Python, CLB Chứng Khoán")
+        skills = col2.text_input("Năng lực & Bằng cấp:", placeholder="VD: IELTS 7.5, Python, CFA")
         
         st.markdown("---")
         target = st.text_area("Mục tiêu cụ thể:", placeholder="VD: Trúng tuyển thực tập sinh Techcombank")
@@ -115,7 +111,7 @@ if step == 1:
         if st.form_submit_button("THẨM ĐỊNH CHIẾN LƯỢC", type="primary"):
             if target and deadline:
                 with st.spinner("AI đang thẩm định tính khả thi..."):
-                    prompt = f"Hồ sơ: {info}, Kỹ năng: {skills}. Mục tiêu: {target} trong {deadline}. Hãy thẩm định tính khả thi. Nếu phi lý, hãy giải thích và từ chối. Nếu thực tế, nhận xét ngắn gọn. Dưới 100 chữ tiếng Việt."
+                    prompt = f"Hồ sơ: {info}, Kỹ năng: {skills}. Mục tiêu: {target} trong {deadline}. Hãy thẩm định tính khả thi. Nếu phi lý (như trúng số), hãy giải thích và từ chối. Nếu thực tế, nhận xét ngắn gọn. Dưới 100 chữ tiếng Việt."
                     st.session_state.state["feasibility"] = call_ai_safe(prompt)
                     st.session_state.state["profile"] = {"info": info, "skills": skills}
                     st.session_state.state["goal"] = {"task": target, "time": deadline}
@@ -134,7 +130,7 @@ elif step == 2:
     
     if not st.session_state.state["sub_tasks"]:
         with st.spinner("AI đang bóc tách lộ trình..."):
-            prompt = f"Mục tiêu: {st.session_state.state['goal']['task']} trong {st.session_state.state['goal']['time']}. Vạch ra 4 hạng mục nhỏ cần chuẩn bị. Trả về JSON: {{\\\"items\\\": {{\\\"Tên mục\\\": \\\"Gợi ý chi tiết\\\"}}}}"
+            prompt = f"Mục tiêu: {st.session_state.state['goal']['task']} trong {st.session_state.state['goal']['time']}. Vạch ra 4 hạng mục nhỏ cần chuẩn bị (Kiến thức, Kỹ năng, Công cụ, Network). Trả về JSON: {{\\\"items\\\": {{\\\"Tên mục\\\": \\\"Gợi ý chi tiết\\\"}}}}"
             st.session_state.state["sub_tasks"] = call_ai_safe(prompt)
     
     if isinstance(st.session_state.state["sub_tasks"], dict):
