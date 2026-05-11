@@ -23,7 +23,8 @@ FIREBASE_KEY = "AIzaSyD00faEnc-wexp9f3UIdfSJFrMZwNOFm7A"
 GEMINI_KEY = "AIzaSyAfWw0C4vlqiN5kYAtrGYFl2zudYYYWT1A"
 
 def call_ai_safe(prompt):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}"
+    # Đã sửa triệt để thành v1, xóa bỏ hoàn toàn v1beta
+    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}"
     headers = {'Content-Type': 'application/json'}
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
     
