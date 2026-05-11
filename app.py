@@ -1,4 +1,5 @@
 import streamlit as st
+import google.generativeai as genai
 import requests
 import json
 import re
@@ -19,26 +20,31 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-FIREBASE_KEY = "AIzaSyD00faEnc-wexp9f3UIdfSJFrMZwNOFm7A"
+# ==========================================
+# CẤU HÌNH GOOGLE SDK CHÍNH THỨC
+# ==========================================
+GEMINI_KEY = "AIzaSyAfWw0C4vlqiN5kYAtrGYFl2zudYYYWT1A"
+genai.configure(api_key=GEMINI_KEY)
+model = genai.GenerativeModel('gemini-1.5-flash')
 
 def call_ai_safe(prompt):
-    url = "https://text.pollinations.ai/"
-    system_prompt = prompt + "\n\n(Chỉ xuất ra định dạng JSON hợp lệ, tuyệt đối không giải thích thêm, không dùng markdown block)."
-    
     try:
-        response = requests.post(url, data=system_prompt.encode('utf-8'), timeout=45)
+        response = model.generate_content(prompt)
+        text = response.text
         
-        if response.status_code == 200:
-            text = response.text
-            json_match = re.search(r'\{.*\}', text, re.DOTALL)
-            if json_match:
-                try: return json.loads(json_match.group(0))
-                except: pass
-            return text
-        else:
-            return f"Lỗi từ server AI công cộng: {response.status_code}"
+        # Ép tìm JSON nếu có
+        json_match = re.search(r'\{.*\}', text, re.DOTALL)
+        if json_match:
+            try: return json.loads(json_match.group(0))
+            except: pass
+        return text
     except Exception as e:
-        return f"Lỗi kết nối mạng: {str(e)}"
+        return f"Lỗi từ Google SDK: {str(e)}"
+
+# ==========================================
+# XÁC THỰC FIREBASE
+# ==========================================
+FIREBASE_KEY = "AIzaSyD00faEnc-wexp9f3UIdfSJFrMZwNOFm7A"
 
 def firebase_auth(email, password, is_signup=False):
     url = f"https://identitytoolkit.googleapis.com/v1/accounts:{'signUp' if is_signup else 'signInWithPassword'}?key={FIREBASE_KEY}"
@@ -47,6 +53,9 @@ def firebase_auth(email, password, is_signup=False):
         return res.json()
     except: return {"error": {"message": "Lỗi kết nối Server Firebase"}}
 
+# ==========================================
+# GIAO DIỆN & TRẠNG THÁI
+# ==========================================
 if 'state' not in st.session_state:
     st.session_state.state = {
         "logged_in": False, "email": "", "step": 1,
@@ -96,7 +105,7 @@ if step == 1:
     with st.form("step1"):
         col1, col2 = st.columns(2)
         info = col1.text_input("Vị trí & Trình độ:", placeholder="VD: Sinh viên năm 3")
-        skills = col2.text_input("Năng lực & Bằng cấp:", placeholder="VD: IELTS 7.5, Python, CFA Level 1")
+        skills = col2.text_input("Năng lực & Bằng cấp:", placeholder="VD: IELTS 7.5, Python, CLB Chứng Khoán")
         
         st.markdown("---")
         target = st.text_area("Mục tiêu cụ thể:", placeholder="VD: Trúng tuyển thực tập sinh")
