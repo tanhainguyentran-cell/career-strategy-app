@@ -15,7 +15,7 @@ st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap');
     
-    html, body, [class*="css"] { font-family: 'Inter', sans-serif; color: #1A1A1A; }
+    html, body, [class*="css"] { font-family: 'Inter', sans-serif; color: #1A1A1A; line-height: 1.6; }
     .stApp { background-color: #FAFAFA; }
     
     h1, h2, h3, h4 { font-family: 'Playfair Display', serif; color: #0F172A; letter-spacing: -0.5px; }
@@ -48,7 +48,7 @@ st.markdown("""
     
     .magic-btn>button { 
         background-color: transparent !important; color: #D4AF37 !important; 
-        border: 1px solid #D4AF37 !important; padding: 1rem; width: 100%;
+        border: 1px solid #D4AF37 !important; padding: 1rem; width: 100%; font-weight: bold !important;
     }
     .magic-btn>button:hover { background-color: #D4AF37 !important; color: #FFFFFF !important; }
     
@@ -57,9 +57,11 @@ st.markdown("""
     }
     .stTextInput>div>div>input:focus, .stTextArea>div>div>textarea:focus { border-color: #0F172A; box-shadow: none; }
     
-    /* Progress bar steps */
     .step-indicator { text-align: center; margin-bottom: 2rem; font-family: 'Playfair Display', serif; color: #888; letter-spacing: 2px; }
     .step-indicator span.active { color: #D4AF37; font-weight: bold; border-bottom: 2px solid #D4AF37; padding-bottom: 5px; }
+    
+    /* Làm đẹp các khung text area để hiển thị kết quả AI */
+    textarea { background-color: #FCFCFC !important; border-left: 3px solid #D4AF37 !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -78,7 +80,7 @@ def firebase_auth(email, password, is_signup=False):
         return {"error": {"message": str(e)}}
 
 # ==========================================
-# STATE & HÀM AI 
+# STATE & HÀM AI ĐÃ FIX LỖI 404 VÀ TỐI ƯU PROMPT
 # ==========================================
 if 'user_token' not in st.session_state: st.session_state.user_token = None
 if 'user_email' not in st.session_state: st.session_state.user_email = None
@@ -96,13 +98,17 @@ if 'app_state' not in st.session_state:
 def hoi_ai_json(prompt, api_key):
     try:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash-latest')
+        # Đã đổi tên model thành bản ổn định nhất
+        model = genai.GenerativeModel('gemini-1.5-flash')
         res = model.generate_content(prompt).text
-        # Làm sạch JSON nếu AI bọc trong markdown
-        res = res.replace("```json", "").replace("```", "").strip()
-        json_match = re.search(r'\{.*\}', res, re.DOTALL)
-        if json_match: return json.loads(json_match.group(0))
-        return None
+        
+        # Bắt JSON an toàn hơn
+        json_match = re.search(r'\{[\s\S]*\}', res)
+        if json_match: 
+            return json.loads(json_match.group(0))
+        else:
+            st.error("AI không trả về đúng định dạng JSON. Vui lòng thử lại.")
+            return None
     except Exception as e:
         st.error(f"Lỗi AI: {e}")
         return None
@@ -144,7 +150,7 @@ if not st.session_state.user_token:
     st.stop()
 
 # ==========================================
-# SIDEBAR (CHỈ CHỨA CÔNG CỤ, KHÔNG ĐIỀU HƯỚNG BƯỚC)
+# SIDEBAR
 # ==========================================
 with st.sidebar:
     st.markdown("<h2 style='text-align: center; color: #D4AF37; margin-bottom: 0;'>EXECUTIVE</h2>", unsafe_allow_html=True)
@@ -162,23 +168,32 @@ with st.sidebar:
     if uploaded_file:
         content = doc_file_pdf(uploaded_file) if uploaded_file.name.endswith('.pdf') else uploaded_file.read().decode("utf-8")
         st.session_state.app_state["file_content"] = content
-        st.success("Tài liệu đã được xác thực.")
+        st.success("Tài liệu đã được load thành công.")
         
         st.markdown("<div class='magic-btn'>", unsafe_allow_html=True)
-        if st.button("TỰ ĐỘNG PHÂN TÍCH JD"):
+        if st.button("TỰ ĐỘNG PHÂN TÍCH JD SÂU"):
             if not api_key: st.error("Cần nhập API Key.")
             else:
-                with st.spinner("Đang định tuyến Framework & Phân tích chiến lược..."):
+                with st.spinner("AI đang bóc tách tài liệu và phân tích chuyên sâu..."):
+                    # Tinh chỉnh Prompt để AI trả về câu dài, có giải thích rõ ràng
                     prompt = f"""
-                    Đọc tài liệu tuyển dụng/công ty sau: {content[:4000]}
-                    Trích xuất 5 bước chiến lược và trả về ĐÚNG định dạng JSON sau:
+                    Bạn là Giám đốc Chiến lược. Hãy đọc tài liệu tuyển dụng/công ty sau: {content[:4000]}
+                    Nhiệm vụ: Phân tích thật CHI TIẾT nhưng CẤU TRÚC ĐƠN GIẢN. Mỗi ý phải có cụm từ chính và phần giải thích ý nghĩa phía sau.
+                    
+                    Trả về ĐÚNG định dạng JSON sau:
                     {{
-                        "company": "Tên công ty", "industry": "Ngành nghề", "framework_used": "Tên framework đánh giá năng lực",
-                        "opportunities": ["Cơ hội 1"], "threats": ["Thách thức 1"],
-                        "company_strengths": ["[DN] Lợi thế 1"], "company_weaknesses": ["[DN] Rủi ro 1"],
-                        "personal_strengths": ["[Cá nhân] Kỹ năng cần có 1"], "personal_weaknesses": ["[Cá nhân] Điểm yếu thường gặp"],
-                        "tows_so": "Chiến lược Tấn công SO", "tows_wt": "Chiến lược Phòng thủ WT",
-                        "smart_goals": ["Mục tiêu SMART 1"]
+                        "company": "Tên công ty", 
+                        "industry": "Ngành nghề", 
+                        "framework_used": "Tên framework năng lực (VD: Khung năng lực Lãnh đạo Ngân hàng)",
+                        "opportunities": ["Cơ hội 1: [Giải thích tại sao đây là cơ hội]", "Cơ hội 2: [Giải thích]"], 
+                        "threats": ["Thách thức 1: [Rủi ro cụ thể là gì]", "Thách thức 2: [Giải thích]"],
+                        "company_strengths": ["Điểm mạnh 1: [Lợi thế mang lại]", "Điểm mạnh 2: [Lợi thế]"], 
+                        "company_weaknesses": ["Điểm yếu 1: [Hạn chế]", "Điểm yếu 2: [Hạn chế]"],
+                        "personal_strengths": ["Kỹ năng 1: [Tại sao JD lại cần kỹ năng này]", "Kỹ năng 2: [Giải thích]"], 
+                        "personal_weaknesses": ["Điểm yếu thường gặp 1: [Hậu quả nếu thiếu]", "Điểm yếu 2: [Giải thích]"],
+                        "tows_so": "Hành động 1: [Làm gì] để [Đạt được gì] dựa trên [Điểm mạnh nào]. \\nHành động 2: ...", 
+                        "tows_wt": "Hành động 1: [Làm gì] để [Né rủi ro gì]. \\nHành động 2: ...",
+                        "smart_goals": ["Mục tiêu 1: Đến [thời gian], đạt [con số] bằng cách [hành động].", "Mục tiêu 2: ..."]
                     }}
                     """
                     data = hoi_ai_json(prompt, api_key)
@@ -190,7 +205,7 @@ with st.sidebar:
                             "personal_strengths": data.get("personal_strengths", []), "personal_weaknesses": data.get("personal_weaknesses", []),
                             "tows": {"SO": data.get("tows_so", ""), "WT": data.get("tows_wt", "")}, "smart_goals": data.get("smart_goals", [])
                         })
-                        st.success("Hoàn tất! Hãy bấm 'Tiếp Tục' để xem kết quả.")
+                        st.success("Hoàn tất! Hãy xem kết quả phân tích chi tiết bên phải.")
         st.markdown("</div>", unsafe_allow_html=True)
 
 # ==========================================
@@ -199,7 +214,6 @@ with st.sidebar:
 step = st.session_state.app_state["step"]
 step_names = ["I. RADAR", "II. DNA", "III. COMPETENCY", "IV. TOWS", "V. REPORT"]
 
-# Hiển thị thanh tiến trình (Progress Indicator)
 indicator_html = "<div class='step-indicator'>"
 for i, name in enumerate(step_names, 1):
     active_class = "class='active'" if i == step else ""
@@ -209,47 +223,48 @@ st.markdown(indicator_html, unsafe_allow_html=True)
 
 # --- NỘI DUNG TỪNG BƯỚC ---
 if step == 1:
-    st.markdown("<div class='app-card'><h2>I. Radar Thị Trường Vĩ Mô (PESTLE)</h2></div>", unsafe_allow_html=True)
+    st.markdown("<div class='app-card'><h2>I. Radar Thị Trường Vĩ Mô (PESTLE)</h2><p style='color:#666;'>Nhận diện các biến động bên ngoài nằm ngoài tầm kiểm soát của doanh nghiệp.</p></div>", unsafe_allow_html=True)
     colA, colB = st.columns(2)
     st.session_state.app_state['industry'] = colA.text_input("Ngành nghề:", st.session_state.app_state['industry'])
     st.session_state.app_state['company'] = colB.text_input("Doanh nghiệp:", st.session_state.app_state['company'])
     
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown("<h4>Cơ hội (Opportunities)</h4>", unsafe_allow_html=True)
-        st.text_area("Thêm cơ hội (Mỗi dòng 1 ý):", value="\n".join(st.session_state.app_state["opportunities"]), key="o_input", height=150)
+        st.markdown("<h4 style='color: #047857;'>Cơ hội Mở rộng (Opportunities)</h4>", unsafe_allow_html=True)
+        st.text_area("Chi tiết cơ hội:", value="\n\n".join(st.session_state.app_state["opportunities"]), key="o_input", height=250)
     with c2:
-        st.markdown("<h4>Thách thức (Threats)</h4>", unsafe_allow_html=True)
-        st.text_area("Thêm thách thức (Mỗi dòng 1 ý):", value="\n".join(st.session_state.app_state["threats"]), key="t_input", height=150)
+        st.markdown("<h4 style='color: #B91C1C;'>Thách thức Thị trường (Threats)</h4>", unsafe_allow_html=True)
+        st.text_area("Chi tiết thách thức:", value="\n\n".join(st.session_state.app_state["threats"]), key="t_input", height=250)
 
 elif step == 2:
-    st.markdown("<div class='app-card'><h2>II. DNA Doanh Nghiệp (VRIO)</h2></div>", unsafe_allow_html=True)
-    st.markdown(f"<p style='color: #D4AF37; font-weight: 600;'>Framework Định Tuyến: {st.session_state.app_state['framework_used'] or 'Chưa xác định'}</p>", unsafe_allow_html=True)
+    st.markdown("<div class='app-card'><h2>II. Phân Tích DNA Doanh Nghiệp (VRIO)</h2><p style='color:#666;'>Đánh giá xem lợi thế của công ty có bền vững không (Có giá trị? Có hiếm không?).</p></div>", unsafe_allow_html=True)
     
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown("<h4>Lợi thế Cạnh tranh DN</h4>", unsafe_allow_html=True)
-        st.text_area("Điểm mạnh DN:", value="\n".join(st.session_state.app_state["company_strengths"]), height=150)
+        st.markdown("<h4>Lợi thế Cạnh tranh Cốt lõi</h4>", unsafe_allow_html=True)
+        st.text_area("Điểm mạnh DN:", value="\n\n".join(st.session_state.app_state["company_strengths"]), height=250)
     with c2:
-        st.markdown("<h4>Rủi ro / Điểm yếu DN</h4>", unsafe_allow_html=True)
-        st.text_area("Điểm yếu DN:", value="\n".join(st.session_state.app_state["company_weaknesses"]), height=150)
+        st.markdown("<h4>Rủi ro Nội tại & Điểm mù</h4>", unsafe_allow_html=True)
+        st.text_area("Điểm yếu DN:", value="\n\n".join(st.session_state.app_state["company_weaknesses"]), height=250)
 
 elif step == 3:
-    st.markdown("<div class='app-card'><h2>III. Bản Đồ Năng Lực Cá Nhân (STAR)</h2></div>", unsafe_allow_html=True)
+    st.markdown("<div class='app-card'><h2>III. Bản Đồ Năng Lực Cá Nhân (STAR)</h2><p style='color:#666;'>Soi chiếu kỹ năng của bạn vào khung năng lực mà nhà tuyển dụng yêu cầu.</p></div>", unsafe_allow_html=True)
+    st.info(f"**Khung Đánh Giá Bắt Buộc:** {st.session_state.app_state['framework_used'] or 'Chưa xác định'}")
+    
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown("<h4>Kỹ năng cốt lõi (Strengths)</h4>", unsafe_allow_html=True)
-        st.text_area("Điểm mạnh cá nhân:", value="\n".join(st.session_state.app_state["personal_strengths"]), height=150)
+        st.markdown("<h4>Kỹ năng Must-have (Strengths)</h4>", unsafe_allow_html=True)
+        st.text_area("Kỹ năng bạn cần chứng minh:", value="\n\n".join(st.session_state.app_state["personal_strengths"]), height=250)
     with c2:
-        st.markdown("<h4>Lỗ hổng kỹ năng (Weaknesses)</h4>", unsafe_allow_html=True)
-        st.text_area("Điểm yếu cá nhân:", value="\n".join(st.session_state.app_state["personal_weaknesses"]), height=150)
+        st.markdown("<h4>Lỗ hổng Kỹ năng (Weaknesses)</h4>", unsafe_allow_html=True)
+        st.text_area("Điểm yếu bạn cần tìm cách khắc phục:", value="\n\n".join(st.session_state.app_state["personal_weaknesses"]), height=250)
 
 elif step == 4:
-    st.markdown("<div class='app-card'><h2>IV. Giao Thoa Chiến Lược (TOWS)</h2></div>", unsafe_allow_html=True)
-    st.markdown("<h4>Chiến lược Khai thác (SO)</h4>", unsafe_allow_html=True)
-    st.session_state.app_state["tows"]["SO"] = st.text_area("Dùng Điểm mạnh chớp Cơ hội:", st.session_state.app_state["tows"]["SO"], height=120)
-    st.markdown("<br><h4>Chiến lược Phòng thủ (WT)</h4>", unsafe_allow_html=True)
-    st.session_state.app_state["tows"]["WT"] = st.text_area("Khắc phục Điểm yếu né Thách thức:", st.session_state.app_state["tows"]["WT"], height=120)
+    st.markdown("<div class='app-card'><h2>IV. Ma Trận Chiến Lược Kép (TOWS)</h2><p style='color:#666;'>Đây là bước quan trọng nhất. Bạn sẽ làm gì để giao thoa giữa thị trường và bản thân?</p></div>", unsafe_allow_html=True)
+    st.markdown("<h4>Chiến lược Khai thác (SO: Strength + Opportunity)</h4>", unsafe_allow_html=True)
+    st.session_state.app_state["tows"]["SO"] = st.text_area("Kế hoạch hành động:", st.session_state.app_state["tows"]["SO"], height=150)
+    st.markdown("<br><h4>Chiến lược Phòng thủ (WT: Weakness + Threat)</h4>", unsafe_allow_html=True)
+    st.session_state.app_state["tows"]["WT"] = st.text_area("Kế hoạch quản trị rủi ro:", st.session_state.app_state["tows"]["WT"], height=150)
 
 elif step == 5:
     st.markdown(f"""
@@ -261,7 +276,7 @@ elif step == 5:
     
     st.markdown("<div class='app-card'>", unsafe_allow_html=True)
     st.markdown("<h3>Lộ trình Thực thi (SMART Execution)</h3>", unsafe_allow_html=True)
-    st.text_area("Mục tiêu của bạn:", value="\n".join(st.session_state.app_state["smart_goals"]), height=150)
+    st.text_area("Mục tiêu của bạn (Đã được đo lường):", value="\n\n".join(st.session_state.app_state["smart_goals"]), height=200)
     st.markdown("</div>", unsafe_allow_html=True)
 
 # --- NÚT ĐIỀU HƯỚNG (WIZARD NEXT/BACK) ---
@@ -270,12 +285,12 @@ col_back, col_space, col_next = st.columns([2, 6, 2])
 
 with col_back:
     if step > 1:
-        if st.button("← QUAY LẠI", use_container_width=True):
+        if st.button("← QUAY LẠI BƯỚC TRƯỚC", use_container_width=True):
             st.session_state.app_state["step"] -= 1
             st.rerun()
 
 with col_next:
     if step < 5:
-        if st.button("TIẾP TỤC →", type="primary", use_container_width=True):
+        if st.button("XÁC NHẬN & TIẾP TỤC →", type="primary", use_container_width=True):
             st.session_state.app_state["step"] += 1
             st.rerun()
