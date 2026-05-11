@@ -19,7 +19,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-FIREBASE_KEY = "AIzaSyCNigw85FMCdi0HsRI1RUU5lwwq1tNMOwg"
+FIREBASE_KEY = "AIzaSyD00faEnc-wexp9f3UIdfSJFrMZwNOFm7A"
 GEMINI_KEY = "AIzaSyAfWw0C4vlqiN5kYAtrGYFl2zudYYYWT1A"
 
 def call_ai_safe(prompt):
@@ -101,7 +101,7 @@ if step == 1:
     
     with st.form("step1"):
         col1, col2 = st.columns(2)
-        info = col1.text_input("Vị trí & Trình độ:", placeholder="VD: Sinh viên năm 3 - DAV")
+        info = col1.text_input("Vị trí & Trình độ:", placeholder="VD: Sinh viên năm 3 - Khoa Kinh tế Quốc tế")
         skills = col2.text_input("Năng lực & Bằng cấp:", placeholder="VD: IELTS 7.5, Python, CFA")
         
         st.markdown("---")
