@@ -2,7 +2,6 @@ import streamlit as st
 import requests
 import json
 import re
-import PyPDF2
 
 st.set_page_config(page_title="Executive Strategy Board", layout="wide")
 
@@ -23,7 +22,7 @@ st.markdown("""
 API_KEY = "AIzaSyCNigw85FMCdi0HsRI1RUU5lwwq1tNMOwg"
 
 def call_ai_safe(prompt):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={API_KEY}"
     headers = {'Content-Type': 'application/json'}
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
     
