@@ -41,16 +41,15 @@ def firebase_auth(email, password, is_signup=False):
         return res.json()
     except: return {"error": {"message": "Lỗi kết nối"}}
 
-# PHƯƠNG THỨC KẾT NỐI AI MỚI (DÙNG REQUESTS TRỰC TIẾP)
 def call_gemini_api(prompt, api_key):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    # Sử dụng endpoint v1 ổn định thay vì v1beta
+    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={api_key}"
     headers = {'Content-Type': 'application/json'}
     data = {"contents": [{"parts": [{"text": prompt}]}]}
     try:
         res = requests.post(url, headers=headers, json=data)
         res_json = res.json()
         text = res_json['candidates'][0]['content']['parts'][0]['text']
-        # Trích xuất JSON từ phản hồi
         match = re.search(r'\{.*\}', text, re.DOTALL)
         return json.loads(match.group(0)) if match else None
     except Exception as e:
@@ -103,7 +102,7 @@ with st.sidebar:
         st.session_state.app_state["file"] = "".join(p.extract_text() for p in reader.pages)
         st.success("Tài liệu đã được xác thực.")
         st.markdown("<div class='magic-btn'>", unsafe_allow_html=True)
-        if st.button("✨ TỰ ĐỘNG PHÂN TÍCH"):
+        if st.button("✨ TỰ ĐỘNG PHÂN TÍCH CHUYÊN SÂU"):
             if not api_key: st.error("Cần API Key.")
             else:
                 with st.spinner("AI đang giải mã chiến lược..."):
@@ -132,11 +131,16 @@ with st.sidebar:
 # Điều hướng Wizard
 step = st.session_state.app_state["step"]
 names = ["I. RADAR", "II. DNA", "III. NĂNG LỰC", "IV. TOWS", "V. REPORT"]
-st.markdown(f"<div class='step-indicator'>{''.join([f'<span class={\"active\" if i+1==step else \"\"}>{n}</span> &nbsp;&nbsp; ' for i, n in enumerate(names)])}</div>", unsafe_allow_html=True)
+indicator_html = "<div class='step-indicator'>"
+for i, name in enumerate(names, 1):
+    active_class = "class='active'" if i == step else ""
+    indicator_html += f"<span {active_class}>{name}</span> &nbsp;&nbsp;&nbsp; "
+indicator_html += "</div>"
+st.markdown(indicator_html, unsafe_allow_html=True)
 
-# Từng bước chi tiết
+# --- NỘI DUNG TỪNG BƯỚC ---
 if step == 1:
-    st.markdown("<div class='app-card'><h2>I. Radar Thị Trường (Vĩ mô)</h2><p>Dựa trên mô hình PESTLE để quét môi trường bên ngoài[cite: 12, 41].</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='app-card'><h2>I. Radar Thị Trường (Vĩ mô)</h2><p>Phân tích PESTLE để tìm Cơ hội và Thách thức.</p></div>", unsafe_allow_html=True)
     st.session_state.app_state['industry'] = st.text_input("Ngành nghề mục tiêu:", st.session_state.app_state['industry'])
     st.session_state.app_state['company'] = st.text_input("Công ty mục tiêu:", st.session_state.app_state['company'])
     c1, c2 = st.columns(2)
@@ -144,25 +148,26 @@ if step == 1:
     with c2: st.markdown("<h4>🔴 Thách thức (Threats)</h4>", unsafe_allow_html=True); st.text_area("T:", "\n\n".join(st.session_state.app_state["threats"]), height=300)
 
 elif step == 2:
-    st.markdown("<div class='app-card'><h2>II. DNA Doanh Nghiệp (VRIO)</h2><p>Phân tích nguồn lực nội tại của {st.session_state.app_state['company']}[cite: 14, 60].</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='app-card'><h2>II. DNA Doanh Nghiệp (VRIO)</h2><p>Phân tích nội tại tổ chức mục tiêu.</p></div>", unsafe_allow_html=True)
     c1, c2 = st.columns(2)
     with c1: st.markdown("<h4>💪 Điểm mạnh DN (Strengths)</h4>", unsafe_allow_html=True); st.text_area("S:", "\n\n".join(st.session_state.app_state["company_s"]), height=300)
     with c2: st.markdown("<h4>📉 Điểm yếu DN (Weaknesses)</h4>", unsafe_allow_html=True); st.text_area("W:", "\n\n".join(st.session_state.app_state["company_w"]), height=300)
 
 elif step == 3:
-    st.markdown("<div class='app-card'><h2>III. Bản Đồ Năng Lực Cá Nhân (STAR)</h2><p>Định tuyến dựa trên khung: **{st.session_state.app_state['framework']}**[cite: 14, 79, 81].</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='app-card'><h2>III. Bản Đồ Năng Lực Cá Nhân (STAR)</h2><p>Định tuyến khung năng lực.</p></div>", unsafe_allow_html=True)
+    st.info(f"📌 Framework áp dụng: {st.session_state.app_state['framework']}")
     c1, c2 = st.columns(2)
     with c1: st.markdown("<h4>🌟 Thế mạnh cá nhân</h4>", unsafe_allow_html=True); st.text_area("S:", "\n\n".join(st.session_state.app_state["personal_s"]), height=300)
     with c2: st.markdown("<h4>⚠️ Điểm cần bổ trợ</h4>", unsafe_allow_html=True); st.text_area("W:", "\n\n".join(st.session_state.app_state["personal_w"]), height=300)
 
 elif step == 4:
-    st.markdown("<div class='app-card'><h2>IV. Ma Trận Chiến Lược TOWS</h2><p>Sự kết hợp chéo giữa các yếu tố để tạo hành động thực chiến[cite: 16, 96, 97].</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='app-card'><h2>IV. Ma Trận Chiến Lược TOWS</h2></div>", unsafe_allow_html=True)
     st.markdown("<h4>🚀 Chiến lược Tấn công (SO)</h4>", unsafe_allow_html=True); st.text_area("SO:", st.session_state.app_state["tows"]["SO"], height=150)
     st.markdown("<h4>🛡️ Chiến lược Phòng thủ (WT)</h4>", unsafe_allow_html=True); st.text_area("WT:", st.session_state.app_state["tows"]["WT"], height=150)
 
 elif step == 5:
     st.markdown(f"<div class='app-card' style='text-align: center;'><h1>STRATEGY REPORT: {st.session_state.app_state['company'].upper()}</h1></div>", unsafe_allow_html=True)
-    st.markdown("<div class='app-card'><h3>Kế hoạch thực thi SMART [cite: 22, 116]</h3>", unsafe_allow_html=True)
+    st.markdown("<div class='app-card'><h3>Kế hoạch thực thi SMART</h3>", unsafe_allow_html=True)
     for g in st.session_state.app_state["smart"]: st.markdown(f"<p style='font-size: 1.1rem; border-bottom: 1px solid #EEE; padding: 10px 0;'>📍 {g}</p>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
