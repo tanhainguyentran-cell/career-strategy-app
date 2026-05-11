@@ -1,67 +1,59 @@
 import streamlit as st
 import requests
 import json
-from datetime import date
-import PyPDF2
 import re
+import PyPDF2
 
 # ==========================================
 # CẤU HÌNH GIAO DIỆN LUXURY EXECUTIVE
 # ==========================================
-st.set_page_config(page_title="Executive Career Strategist", layout="wide")
+st.set_page_config(page_title="Executive Strategy", layout="wide")
 
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:wght@600;700&display=swap');
-    
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; color: #1A1A1A; }
     .stApp { background-color: #FAFAFA; }
-    
-    /* Thiết kế tiêu đề sang trọng */
-    h1, h2, h3 { font-family: 'Playfair Display', serif; color: #0F172A; letter-spacing: -0.5px; }
-    
-    /* Thẻ Card nội dung */
-    .app-card { 
-        background: white; padding: 2.5rem; border-radius: 4px; 
-        box-shadow: 0 10px 30px rgba(0,0,0,0.02); margin-bottom: 2rem; 
-        border-top: 4px solid #D4AF37; /* Màu Vàng Champagne */
-    }
-    
-    /* Nút bấm Executive */
-    .stButton>button[kind="primary"] { 
-        background-color: #1A1A1A !important; color: white !important; 
-        border-radius: 0px !important; width: 100%; border: none !important; 
-        padding: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 2px;
-    }
-    .stButton>button[kind="primary"]:hover { background-color: #D4AF37 !important; color: white !important; }
-    
-    /* Input Fields */
-    input, textarea, select { border-radius: 0px !important; border: 1px solid #E2E8F0 !important; }
+    h1, h2, h3 { font-family: 'Playfair Display', serif; color: #0F172A; }
+    .app-card { background: white; padding: 2.5rem; border-radius: 4px; box-shadow: 0 4px 20px rgba(0,0,0,0.03); margin-bottom: 2rem; border-top: 4px solid #D4AF37; }
+    .stButton>button[kind="primary"] { background-color: #1A1A1A !important; color: white !important; border-radius: 0px !important; width: 100%; border: none !important; padding: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; }
+    .stButton>button[kind="primary"]:hover { background-color: #D4AF37 !important; }
+    .ai-warning { font-size: 0.8rem; color: #888; font-style: italic; margin-top: 10px; }
+    textarea, input { border-radius: 0px !important; }
     </style>
     """, unsafe_allow_html=True)
 
 # ==========================================
-# HÀM KẾT NỐI AI (SỬ DỤNG KEY CỦA TÂN HẢI)
+# HÀM KẾT NỐI AI SIÊU ỔN ĐỊNH
 # ==========================================
-GEMINI_API_KEY = "AIzaSyCNigw85FMCdi0HsRI1RUU5lwwq1tNMOwg"
+# Key của Tân Hải đã được nhúng trực tiếp để ai cũng dùng được
+API_KEY = "AIzaSyCNigw85FMCdi0HsRI1RUU5lwwq1tNMOwg"
 
-def call_ai(prompt):
-    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+def call_gemini(prompt):
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}"
     headers = {'Content-Type': 'application/json'}
-    data = {"contents": [{"parts": [{"text": prompt}]}]}
+    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+    
     try:
-        res = requests.post(url, headers=headers, json=data)
-        res_json = res.json()
-        output = res_json['candidates'][0]['content']['parts'][0]['text']
-        # Trích xuất JSON nếu có
-        json_match = re.search(r'\{.*\}', output, re.DOTALL)
-        if json_match: return json.loads(json_match.group(0))
-        return output
+        response = requests.post(url, headers=headers, json=payload)
+        res_json = response.json()
+        
+        # Kiểm tra cấu trúc phản hồi an toàn
+        if 'candidates' in res_json and len(res_json['candidates']) > 0:
+            candidate = res_json['candidates'][0]
+            if 'content' in candidate and 'parts' in candidate['content']:
+                text_out = candidate['content']['parts'][0]['text']
+                # Tìm JSON nếu có yêu cầu
+                json_match = re.search(r'\{.*\}', text_out, re.DOTALL)
+                if json_match:
+                    return json.loads(json_match.group(0))
+                return text_out
+        return "⚠️ AI hiện đang quá tải hoặc phản hồi không đúng cấu trúc. Vui lòng thử lại sau vài giây."
     except Exception as e:
-        return f"Lỗi kết nối hệ thống: {str(e)}"
+        return f"❌ Lỗi kết nối: {str(e)}"
 
 # ==========================================
-# QUẢN LÝ TRẠNG THÁI (STATE)
+# QUẢN LÝ TRẠNG THÁI
 # ==========================================
 if 'state' not in st.session_state:
     st.session_state.state = {
@@ -69,59 +61,96 @@ if 'state' not in st.session_state:
         "profile": {"location": "", "level": "Sinh viên", "skills": "", "degree": ""},
         "goal": {"target": "", "deadline": ""},
         "feasibility": None,
-        "roadmap_data": None
+        "framework_data": None,
+        "final_roadmap": None
     }
 
-def move_to(s): st.session_state.state["step"] = s
+def move_to(s): 
+    st.session_state.state["step"] = s
+    st.rerun()
 
 # ==========================================
-# BƯỚC 1: KHỞI TẠO HỒ SƠ & ĐÁNH GIÁ MỤC TIÊU
+# BƯỚC 1: HỒ SƠ & MỤC TIÊU
 # ==========================================
 step = st.session_state.state["step"]
 
 if step == 1:
-    st.markdown("<div class='app-card'><h1>01. Thiết Lập Hồ Sơ Chiến Lược</h1><p>Hệ thống AI sẽ dựa trên nền tảng của bạn để xây dựng lộ trình cá nhân hóa.</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='app-card'><h1>01. Hồ Sơ & Mục Tiêu</h1><p>Hệ thống AI sẽ thẩm định nền tảng và mục tiêu của bạn trước khi vạch lộ trình.</p></div>", unsafe_allow_html=True)
     
-    with st.form("profile_form"):
+    with st.form("main_form"):
         col1, col2 = st.columns(2)
-        st.session_state.state["profile"]["location"] = col1.text_input("Vị trí hiện tại (Nơi ở/Nơi làm việc):", value=st.session_state.state["profile"]["location"])
-        st.session_state.state["profile"]["level"] = col2.selectbox("Trình độ học vấn:", ["Sinh viên", "Cử nhân", "Thạc sĩ", "Khác"])
-        st.session_state.state["profile"]["skills"] = st.text_area("Năng lực & Kỹ năng cốt lõi:", placeholder="Ví dụ: Phân tích dữ liệu, Tiếng Anh Ielts 7.5, Python...", value=st.session_state.state["profile"]["skills"])
-        st.session_state.state["profile"]["degree"] = st.text_input("Bằng cấp/Chứng chỉ hiện có:", value=st.session_state.state["profile"]["degree"])
+        loc = col1.text_input("Vị trí/Nơi ở:", value=st.session_state.state["profile"]["location"])
+        lvl = col2.selectbox("Trình độ:", ["Sinh viên", "Cử nhân", "Thạc sĩ", "Khác"], index=0)
+        skills = st.text_area("Năng lực & Bằng cấp:", value=st.session_state.state["profile"]["skills"], placeholder="VD: IELTS 7.5, Python, Kế toán...")
         
         st.markdown("---")
-        st.markdown("### Xác định Mục tiêu")
-        target = st.text_input("Mục tiêu cụ thể của bạn là gì?", placeholder="Ví dụ: Đạt điểm A môn Kinh tế Chính trị / Trúng tuyển Techcombank")
-        deadline = st.text_input("Thời gian hoàn thành (Ví dụ: 2 tuần / 5 tháng):")
+        target = st.text_input("Mục tiêu cụ thể:", placeholder="VD: Trúng tuyển Techcombank / Đạt điểm A môn Kinh tế")
+        deadline = st.text_input("Thời gian dự kiến:", placeholder="VD: 2 tháng / 2 tuần")
         
-        if st.form_submit_button("PHÂN TÍCH TÍNH KHẢ THI", type="primary"):
+        if st.form_submit_button("THẨM ĐỊNH MỤC TIÊU", type="primary"):
             if target and deadline:
-                with st.spinner("AI đang thẩm định lộ trình..."):
+                with st.spinner("AI đang phân tích tính khả thi..."):
                     prompt = f"""
-                    Đóng vai chuyên gia tư vấn chiến lược. 
-                    Hồ sơ: {st.session_state.state['profile']}
-                    Mục tiêu: {target} trong {deadline}
-                    
-                    YÊU CẦU:
-                    1. Đánh giá tính khả thi (Thực tế hay Phi thực tế).
-                    2. Nếu phi thực tế (Ví dụ: 'Làm sao để trúng số', 'Làm giám đốc trong 1 ngày'), hãy giải thích dựa trên logic/xác suất và từ chối vạch lộ trình.
-                    3. Nếu thực tế, hãy đưa ra nhận xét ngắn gọn và khuyến nghị sơ bộ.
-                    4. Trả lời bằng tiếng Việt, chuyên nghiệp, dưới 120 chữ.
+                    Phân tích hồ sơ: {lvl}, kỹ năng: {skills}. 
+                    Mục tiêu: {target} trong {deadline}.
+                    Hãy đánh giá tính khả thi. Nếu phi lý (như trúng số, làm giám đốc trong 1 ngày), hãy giải thích xác suất cực thấp và từ chối. 
+                    Nếu thực tế, hãy nhận xét ngắn gọn. Trả lời dưới 100 từ tiếng Việt.
                     """
-                    st.session_state.state["feasibility"] = call_ai(prompt)
+                    st.session_state.state["feasibility"] = call_gemini(prompt)
+                    st.session_state.state["profile"] = {"location": loc, "level": lvl, "skills": skills}
                     st.session_state.state["goal"] = {"target": target, "deadline": deadline}
             else:
-                st.error("Vui lòng nhập đầy đủ mục tiêu và thời gian.")
+                st.warning("Vui lòng điền đầy đủ mục tiêu và thời gian.")
 
     if st.session_state.state["feasibility"]:
-        st.markdown(f"<div class='app-card'><h3>Kết quả thẩm định từ AI</h3><p>{st.session_state.state['feasibility']}</p></div>", unsafe_allow_html=True)
-        
-        # Nếu mục tiêu khả thi, cho phép đi tiếp
+        st.markdown(f"<div class='app-card'><h3>Kết quả thẩm định AI</h3><p>{st.session_state.state['feasibility']}</p></div>", unsafe_allow_html=True)
+        # Chỉ cho đi tiếp nếu mục tiêu không bị coi là phi thực tế
         if "phi thực tế" not in st.session_state.state["feasibility"].lower():
-            if st.button("XÁC NHẬN & VẠCH CHIẾN LƯỢC CHI TIẾT"):
-                move_to(2)
-                st.rerun()
-        else:
-            st.warning("Mục tiêu hiện tại chưa phù hợp để triển khai chiến lược. Vui lòng điều chỉnh lại.")
+            if st.button("XÁC NHẬN & VẠCH LỘ TRÌNH CHI TIẾT"): move_to(2)
 
-# (Các bước 2, 3, 4 sẽ được tôi code tiếp khi bạn xác nhận Bước 1 đã chạy ổn định với Key mới)
+# ==========================================
+# BƯỚC 2: PHÂN TÍCH CẤU PHẦN CHIẾN LƯỢC
+# ==========================================
+elif step == 2:
+    st.markdown("<div class='app-card'><h1>02. Phân Tích Cấu Phần</h1><p>AI tự động vạch ra các hạng mục cần chuẩn bị dựa trên mục tiêu của bạn.</p></div>", unsafe_allow_html=True)
+    
+    if not st.session_state.state["framework_data"]:
+        with st.spinner("AI đang bóc tách hạng mục..."):
+            prompt = f"""
+            Mục tiêu: {st.session_state.state['goal']['target']} trong {st.session_state.state['goal']['deadline']}.
+            Hãy vạch ra 4 hạng mục quan trọng nhất cần thực hiện (Ví dụ: Kiến thức chuyên môn, Kỹ năng mềm, Hồ sơ...).
+            Trả về JSON duy nhất: {{"items": {{"Tên hạng mục": "Gợi ý chi tiết"}}}}
+            """
+            st.session_state.state["framework_data"] = call_gemini(prompt)
+
+    if isinstance(st.session_state.state["framework_data"], dict):
+        for item, detail in st.session_state.state["framework_data"].get("items", {}).items():
+            st.subheader(f"📍 {item}")
+            st.text_area(f"Nội dung chuẩn bị cho {item}:", value=detail, height=100)
+    
+    st.markdown("<p class='ai-warning'>⚠️ Lưu ý: Thông tin AI hỗ trợ có thể sai sót, hãy kiểm chứng trước khi thực hiện.</p>", unsafe_allow_html=True)
+    if st.button("TỔNG HỢP CHIẾN LƯỢC CUỐI", type="primary"): move_to(3)
+
+# ==========================================
+# BƯỚC 3: LỘ TRÌNH THỰC THI (FINAL REPORT)
+# ==========================================
+elif step == 3:
+    st.markdown("<div class='app-card' style='text-align: center;'><h1>LỘ TRÌNH THỰC THI CHIẾN LƯỢC</h1></div>", unsafe_allow_html=True)
+    
+    if not st.session_state.state["final_roadmap"]:
+        with st.spinner("Đang đúc kết lộ trình..."):
+            prompt = f"""
+            Hồ sơ: {st.session_state.state['profile']}
+            Mục tiêu: {st.session_state.state['goal']}
+            Hãy lập 1 lộ trình thực thi ngắn gọn, chuyên nghiệp, chia theo giai đoạn thời gian cụ thể.
+            Trình bày bằng Markdown thật đẹp.
+            """
+            st.session_state.state["final_roadmap"] = call_gemini(prompt)
+            
+    st.markdown("<div class='app-card'>", unsafe_allow_html=True)
+    st.markdown(st.session_state.state["final_roadmap"])
+    st.markdown("</div>", unsafe_allow_html=True)
+    
+    if st.button("LÀM LẠI TỪ ĐẦU"):
+        st.session_state.state = {"step": 1, "profile": {}, "goal": {}, "feasibility": None, "framework_data": None, "final_roadmap": None}
+        st.rerun()
