@@ -1,80 +1,181 @@
 import streamlit as st
+import pandas as pd
 
-# Cấu hình giao diện
-st.set_page_config(page_title="Career Strategy", layout="wide")
+# 1. CẤU HÌNH TRANG
+st.set_page_config(page_title="Career Strategy Application", layout="wide", initial_sidebar_state="expanded")
 
-# KHỞI TẠO BỘ NHỚ
-if 'step' not in st.session_state:
-    st.session_state.step = 1
-# Tạo 2 mảng rỗng để chứa Cơ hội và Thách thức
-if 'opportunities' not in st.session_state:
-    st.session_state.opportunities = []
-if 'threats' not in st.session_state:
-    st.session_state.threats = []
+# Tùy chỉnh CSS để giao diện chuyên nghiệp hơn
+st.markdown("""
+    <style>
+    .main { background-color: #f8f9fa; }
+    .stButton>button { width: 100%; border-radius: 5px; height: 3em; background-color: #007bff; color: white; }
+    .stExpander { background-color: white; border-radius: 10px; }
+    h1, h2, h3 { color: #1e3a8a; }
+    .tows-box { padding: 15px; border-radius: 10px; border: 1px solid #e5e7eb; height: 100%; }
+    </style>
+    """, unsafe_allow_html=True)
 
-st.title("🎯 Career Strategy Application")
-st.markdown("---")
+# 2. KHỞI TẠO TRẠNG THÁI (STATE MANAGEMENT)
+if 'data' not in st.session_state:
+    st.session_state.data = {
+        "step": 1,
+        "industry": "Kinh tế quốc tế / Tài chính",
+        "opportunities": [], # O từ Step 1
+        "threats": [],      # T từ Step 1
+        "strengths": [],    # S từ Step 2 & 3
+        "weaknesses": [],   # W từ Step 2 & 3
+        "strategies": {"SO": "", "ST": "", "WO": "", "WT": ""},
+        "smart_goals": []
+    }
 
-# THANH ĐIỀU HƯỚNG
+def go_to(step):
+    st.session_state.data["step"] = step
+
+# 3. SIDEBAR ĐIỀU HƯỚNG
 with st.sidebar:
-    st.header("Lộ trình 5 bước")
-    if st.button("1. Market Radar", use_container_width=True): st.session_state.step = 1
-    if st.button("2. Enterprise DNA", use_container_width=True): st.session_state.step = 2
-    if st.button("4. TOWS Matrix (Preview)", use_container_width=True): st.session_state.step = 4
+    st.title("🎯 Career Strategist")
+    st.info(f"📍 Đang ở: Bước {st.session_state.data['step']}/5")
+    
+    st.markdown("---")
+    if st.button("1. Market Radar (PESTLE)"): go_to(1)
+    if st.button("2. Enterprise DNA (VRIO)"): go_to(2)
+    if st.button("3. Competency (STAR)"): go_to(3)
+    if st.button("4. TOWS Matrix"): go_to(4)
+    if st.button("5. SMART Roadmap"): go_to(5)
+    
+    st.markdown("---")
+    if st.button("🔄 Reset Toàn bộ dữ liệu"):
+        st.session_state.data = {
+            "step": 1, "industry": "Kinh tế quốc tế", "opportunities": [], "threats": [],
+            "strengths": [], "weaknesses": [], "strategies": {"SO": "", "ST": "", "WO": "", "WT": ""}, "smart_goals": []
+        }
+        st.rerun()
 
-# HIỂN THỊ NỘI DUNG TỪNG BƯỚC
-if st.session_state.step == 1:
-    st.subheader("Bước 1: Market Radar (Phân tích Vĩ mô & Ngành)")
-    st.write("Sử dụng mô hình PESTLE để quét thị trường. Mỗi yếu tố bạn nhập vào sẽ được hệ thống tự động dán nhãn và luân chuyển về ma trận TOWS ở Bước 4.")
+# 4. CHI TIẾT CÁC BƯỚC
+current_step = st.session_state.data["step"]
+
+# --- BƯỚC 1: MARKET RADAR ---
+if current_step == 1:
+    st.header("🚀 Bước 1: Market Radar (Phân tích ngoại vi)")
+    st.write("Sử dụng PESTLE để xác định các yếu tố khách quan từ thị trường.")
     
-    st.markdown("### Quét dữ liệu PESTLE")
-    
-    # Tạo Form nhập liệu
-    with st.form("pestle_form", clear_on_submit=True):
-        col_input1, col_input2 = st.columns([2, 1])
-        with col_input1:
-            factor = st.text_input("Nhập một yếu tố thị trường (VD: Lãi suất ngân hàng giảm, Xu hướng AI...)")
-        with col_input2:
-            category = st.selectbox("Nhóm yếu tố", ["Political", "Economic", "Social", "Technological", "Legal", "Environmental"])
+    with st.expander("➕ Thêm yếu tố thị trường mới", expanded=True):
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            factor = st.text_input("Yếu tố (VD: Lạm phát tăng, Xu hướng AI...)")
+        with col2:
+            cat = st.selectbox("Phân loại", ["Chính trị", "Kinh tế", "Xã hội", "Công nghệ", "Pháp lý", "Môi trường"])
         
-        impact = st.radio("Đánh giá tác động:", ["Cơ hội (Opportunity)", "Thách thức (Threat)"], horizontal=True)
+        type_ot = st.radio("Đánh giá tác động:", ["Cơ hội (Opportunity)", "Thách thức (Threat)"], horizontal=True)
         
-        submitted = st.form_submit_button("Thêm vào Radar")
-        
-        # Xử lý khi bấm nút "Thêm vào Radar"
-        if submitted and factor:
-            formatted_factor = f"**[{category}]** {factor}"
-            if "Cơ hội" in impact:
-                st.session_state.opportunities.append(formatted_factor)
-                st.success("Đã ghi nhận 1 Cơ hội!")
+        if st.button("Ghi nhận vào hệ thống"):
+            if factor:
+                item = f"[{cat}] {factor}"
+                if "Cơ hội" in type_ot:
+                    st.session_state.data["opportunities"].append(item)
+                else:
+                    st.session_state.data["threats"].append(item)
+                st.success("Đã cập nhật dữ liệu!")
             else:
-                st.session_state.threats.append(formatted_factor)
-                st.error("Đã ghi nhận 1 Thách thức!")
+                st.warning("Vui lòng nhập nội dung yếu tố.")
 
-    # Hiển thị dữ liệu ngay bên dưới
-    st.markdown("### Dữ liệu đã thu thập")
     col_o, col_t = st.columns(2)
     with col_o:
-        st.info("🟢 CƠ HỘI (Opportunities)")
-        for o in st.session_state.opportunities:
-            st.write("✓", o)
-            
+        st.subheader("🟢 Cơ hội (O)")
+        for o in st.session_state.data["opportunities"]: st.write(f"✅ {o}")
     with col_t:
-        st.warning("🔴 THÁCH THỨC (Threats)")
-        for t in st.session_state.threats:
-            st.write("⚠️", t)
+        st.subheader("🔴 Thách thức (T)")
+        for t in st.session_state.data["threats"]: st.write(f"⚠️ {t}")
 
-elif st.session_state.step == 2:
-    st.subheader("Bước 2: Enterprise DNA")
-    st.write("Tính năng đang được xây dựng...")
+# --- BƯỚC 2: ENTERPRISE DNA ---
+elif current_step == 2:
+    st.header("🧬 Bước 2: Enterprise DNA (Nội tại Doanh nghiệp)")
+    st.write("Phân tích lợi thế cạnh tranh của doanh nghiệp mục tiêu bằng mô hình VRIO.")
     
-elif st.session_state.step == 4:
-    st.subheader("Bước 4: TOWS Matrix (Bản xem trước)")
-    st.write("Đây là minh chứng cho việc dữ liệu chảy xuyên suốt. Các yếu tố vĩ mô bạn vừa nhập ở Bước 1 đã tự động bay về đây!")
-    st.write("---")
-    st.write("🟢 **Danh sách Cơ hội (O):**")
-    for o in st.session_state.opportunities:
-        st.write("-", o)
-    st.write("🔴 **Danh sách Thách thức (T):**")
-    for t in st.session_state.threats:
-        st.write("-", t)
+    with st.form("vrio_form"):
+        resource = st.text_input("Nguồn lực/Lợi thế của DN (VD: Hệ thống quản trị rủi ro)")
+        v = st.checkbox("Có giá trị (Valuable)?")
+        r = st.checkbox("Hiếm (Rare)?")
+        i = st.checkbox("Khó sao chép (Inimitable)?")
+        o = st.checkbox("Tổ chức tốt (Organized)?")
+        submit_vrio = st.form_submit_button("Lưu phân tích")
+        
+        if submit_vrio and resource:
+            status = "S" if (v and r and i and o) else "W"
+            tag = "[DN]" if status == "S" else "[Rủi ro DN]"
+            if status == "S":
+                st.session_state.data["strengths"].append(f"{tag} {resource}")
+            else:
+                st.session_state.data["weaknesses"].append(f"{tag} {resource}")
+            st.success("Đã phân loại vào S/W!")
+
+# --- BƯỚC 3: COMPETENCY MAPPING ---
+elif current_step == 3:
+    st.header("🧠 Bước 3: Competency Mapping (Năng lực cá nhân)")
+    st.write("Sử dụng mô hình STAR để chứng minh kỹ năng của bản thân.")
+    
+    with st.form("star_form"):
+        skill = st.text_input("Kỹ năng/Kinh nghiệm (VD: Phân tích dữ liệu bằng Python)")
+        star_detail = st.text_area("Mô tả theo STAR (Situation - Task - Action - Result)")
+        level = st.select_slider("Tự đánh giá năng lực:", options=["Yếu", "Trung bình", "Khá", "Tốt", "Xuất sắc"])
+        submit_star = st.form_submit_button("Lưu năng lực")
+        
+        if submit_star and skill:
+            if level in ["Khá", "Tốt", "Xuất sắc"]:
+                st.session_state.data["strengths"].append(f"[Cá nhân] {skill} ({level})")
+            else:
+                st.session_state.data["weaknesses"].append(f"[Cá nhân] {skill} ({level})")
+            st.success("Đã cập nhật bản đồ năng lực!")
+
+# --- BƯỚC 4: TOWS MATRIX ---
+elif current_step == 4:
+    st.header("⚔️ Bước 4: Ma trận chiến lược TOWS")
+    st.write("Kết hợp các yếu tố để tạo ra chiến lược hành động cụ thể.")
+    
+    # Hiển thị các danh sách S-W-O-T đã thu thập
+    with st.expander("Xem tóm tắt các yếu tố hiện có"):
+        c1, c2 = st.columns(2)
+        c1.write("**Strengths (S):**")
+        for s in st.session_state.data["strengths"]: c1.caption(s)
+        c2.write("**Weaknesses (W):**")
+        for w in st.session_state.data["weaknesses"]: c2.caption(w)
+        c1.write("**Opportunities (O):**")
+        for o in st.session_state.data["opportunities"]: c1.caption(o)
+        c2.write("**Threats (T):**")
+        for t in st.session_state.data["threats"]: c2.caption(t)
+
+    st.markdown("### Thiết lập chiến lược")
+    colA, colB = st.columns(2)
+    with colA:
+        st.session_state.data["strategies"]["SO"] = st.text_area("Chiến lược SO (Dùng S để tận dụng O):", st.session_state.data["strategies"]["SO"])
+        st.session_state.data["strategies"]["WO"] = st.text_area("Chiến lược WO (Vượt qua W để nắm bắt O):", st.session_state.data["strategies"]["WO"])
+    with colB:
+        st.session_state.data["strategies"]["ST"] = st.text_area("Chiến lược ST (Dùng S để né tránh T):", st.session_state.data["strategies"]["ST"])
+        st.session_state.data["strategies"]["WT"] = st.text_area("Chiến lược WT (Giảm thiểu W và né tránh T):", st.session_state.data["strategies"]["WT"])
+
+# --- BƯỚC 5: SMART GOALS ---
+elif current_step == 5:
+    st.header("📅 Bước 5: SMART Roadmap")
+    st.write("Chuyển hóa chiến lược thành mục tiêu có thể đo lường.")
+    
+    with st.form("smart_form"):
+        goal_name = st.text_input("Tên mục tiêu (VD: Đạt chứng chỉ CFA Level 1)")
+        m = st.text_input("Measure (Đo lường bằng con số cụ thể nào?)")
+        t = st.date_input("Time-bound (Hạn chót hoàn thành)")
+        submit_goal = st.form_submit_button("Thêm mục tiêu")
+        
+        if submit_goal and goal_name:
+            st.session_state.data["smart_goals"].append({"goal": goal_name, "measure": m, "deadline": str(t)})
+            st.success("Đã thêm vào lộ trình!")
+
+    st.subheader("📋 Lộ trình của bạn")
+    if st.session_state.data["smart_goals"]:
+        df = pd.DataFrame(st.session_state.data["smart_goals"])
+        st.table(df)
+        
+        # Nút xuất báo cáo giả lập
+        st.download_button("📥 Tải báo cáo chiến lược (Markdown)", 
+                         f"# Career Strategy Report\n\n## Strategies\n{st.session_state.data['strategies']}", 
+                         file_name="my_strategy.md")
+    else:
+        st.info("Chưa có mục tiêu nào được thiết lập.")
