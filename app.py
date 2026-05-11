@@ -20,39 +20,32 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 FIREBASE_KEY = "AIzaSyD00faEnc-wexp9f3UIdfSJFrMZwNOFm7A"
-GEMINI_KEY = "AIzaSyAfWw0C4vlqiN5kYAtrGYFl2zudYYYWT1A"
 
 def call_ai_safe(prompt):
-    # Đã sửa triệt để thành v1, xóa bỏ hoàn toàn v1beta
-    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}"
-    headers = {'Content-Type': 'application/json'}
-    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+    url = "https://text.pollinations.ai/"
+    system_prompt = prompt + "\n\n(Chỉ xuất ra định dạng JSON hợp lệ, tuyệt đối không giải thích thêm, không dùng markdown block)."
     
     try:
-        response = requests.post(url, headers=headers, json=payload, timeout=30)
-        res_data = response.json()
+        response = requests.post(url, data=system_prompt.encode('utf-8'), timeout=45)
         
-        if 'error' in res_data:
-            return f"Lỗi từ Google API: {res_data['error'].get('message', 'Không rõ chi tiết')}"
-            
-        if 'candidates' in res_data and len(res_data['candidates']) > 0:
-            text = res_data['candidates'][0].get('content', {}).get('parts', [{}])[0].get('text', '')
-            if text:
-                json_match = re.search(r'\{.*\}', text, re.DOTALL)
-                if json_match:
-                    try: return json.loads(json_match.group(0))
-                    except: pass
-                return text
-        return "Hệ thống AI trả về dữ liệu rỗng."
+        if response.status_code == 200:
+            text = response.text
+            json_match = re.search(r'\{.*\}', text, re.DOTALL)
+            if json_match:
+                try: return json.loads(json_match.group(0))
+                except: pass
+            return text
+        else:
+            return f"Lỗi từ server AI công cộng: {response.status_code}"
     except Exception as e:
-        return f"Lỗi kết nối: {str(e)}"
+        return f"Lỗi kết nối mạng: {str(e)}"
 
 def firebase_auth(email, password, is_signup=False):
     url = f"https://identitytoolkit.googleapis.com/v1/accounts:{'signUp' if is_signup else 'signInWithPassword'}?key={FIREBASE_KEY}"
     try:
         res = requests.post(url, json={"email": email, "password": password, "returnSecureToken": True})
         return res.json()
-    except: return {"error": {"message": "Lỗi kết nối Server"}}
+    except: return {"error": {"message": "Lỗi kết nối Server Firebase"}}
 
 if 'state' not in st.session_state:
     st.session_state.state = {
@@ -84,7 +77,7 @@ if not st.session_state.state["logged_in"]:
             if st.form_submit_button("TẠO TÀI KHOẢN", type="primary"):
                 res = firebase_auth(es, ps, True)
                 if "idToken" in res: st.success("Đã tạo tài khoản thành công!")
-                else: st.error("Tạo tài khoản thất bại.")
+                else: st.error(res.get("error", {}).get("message", "Đăng ký thất bại"))
     st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
 
@@ -102,17 +95,17 @@ if step == 1:
     
     with st.form("step1"):
         col1, col2 = st.columns(2)
-        info = col1.text_input("Vị trí & Trình độ:", placeholder="VD: Sinh viên năm 3 - Khoa Kinh tế Quốc tế")
-        skills = col2.text_input("Năng lực & Bằng cấp:", placeholder="VD: IELTS 7.5, Python, CFA")
+        info = col1.text_input("Vị trí & Trình độ:", placeholder="VD: Sinh viên năm 3")
+        skills = col2.text_input("Năng lực & Bằng cấp:", placeholder="VD: IELTS 7.5, Python, CFA Level 1")
         
         st.markdown("---")
-        target = st.text_area("Mục tiêu cụ thể:", placeholder="VD: Trúng tuyển thực tập sinh Techcombank")
+        target = st.text_area("Mục tiêu cụ thể:", placeholder="VD: Trúng tuyển thực tập sinh")
         deadline = st.text_input("Thời gian thực hiện:", placeholder="VD: 4 tháng")
         
         if st.form_submit_button("THẨM ĐỊNH CHIẾN LƯỢC", type="primary"):
             if target and deadline:
                 with st.spinner("AI đang thẩm định tính khả thi..."):
-                    prompt = f"Hồ sơ: {info}, Kỹ năng: {skills}. Mục tiêu: {target} trong {deadline}. Hãy thẩm định tính khả thi. Nếu phi lý (như trúng số), hãy giải thích và từ chối. Nếu thực tế, nhận xét ngắn gọn. Dưới 100 chữ tiếng Việt."
+                    prompt = f"Hồ sơ: {info}, Kỹ năng: {skills}. Mục tiêu: {target} trong {deadline}. Hãy thẩm định tính khả thi. Nếu phi lý, hãy giải thích và từ chối. Nếu thực tế, nhận xét ngắn gọn. Dưới 100 chữ tiếng Việt."
                     st.session_state.state["feasibility"] = call_ai_safe(prompt)
                     st.session_state.state["profile"] = {"info": info, "skills": skills}
                     st.session_state.state["goal"] = {"task": target, "time": deadline}
@@ -120,7 +113,7 @@ if step == 1:
     
     if st.session_state.state["feasibility"]:
         st.markdown(f"<div class='executive-card'><h3>Phản hồi từ Mentor AI</h3><p>{st.session_state.state['feasibility']}</p></div>", unsafe_allow_html=True)
-        if "Lỗi từ Google API" not in st.session_state.state["feasibility"] and "phi thực tế" not in st.session_state.state["feasibility"].lower():
+        if "Lỗi" not in st.session_state.state["feasibility"] and "phi thực tế" not in st.session_state.state["feasibility"].lower():
             if st.button("XÁC NHẬN & VẠCH LỘ TRÌNH"): 
                 st.session_state.state["step"] = 2
                 st.rerun()
